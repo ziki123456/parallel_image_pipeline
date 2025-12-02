@@ -67,7 +67,11 @@ The `Config` class in `config.py` allows adjustment of:
 
 Example:
 
-```python
+class Config:
+pass
+
+```
+python
 Config(
     input_dir="input",
     output_dir="output",
