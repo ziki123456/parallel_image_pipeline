@@ -180,7 +180,7 @@ Aplikace je rozdělena do tří hlavních paralelních celků:
 Konfigurace je uložená v `config.py`:
 
 ```python
-input_dir = "input"
+input_dir = "input_Images"
 output_dir = "output"
 num_workers = 3
 resize_to = (800, 800)
