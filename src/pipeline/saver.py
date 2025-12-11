@@ -1,53 +1,67 @@
 # src/pipeline/saver.py
-import os
-import queue
-import threading
-from typing import Dict, Tuple
+from pathlib import Path
+from queue import Queue, Empty
+from typing import Dict
 
 from PIL import Image
 
-from .config import Config
+from pipeline.config import Config
+from pipeline.logger import log_info, log_error
 
 
 def saver_thread(
-    processed_queue: queue.Queue,
+    processed_queue: Queue,
     config: Config,
     active_workers: Dict[str, int],
-    lock: threading.Lock,
+    lock
 ) -> None:
     """
-    Vlákno, které ukládá zpracované obrázky z processed_queue do výstupní složky.
-
-    Končí, když:
-    - už nejsou aktivní workeři (active_workers["count"] == 0)
-    A současně
-    - fronta processed_queue je prázdná
+    Saves processed images from processed_queue into the output directory.
+    Logs saving attempts, errors, and final completion.
     """
-    print("[SAVER] Start")
 
-    os.makedirs(config.output_dir, exist_ok=True)
+    output_path = Path(config.output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    log_info("saver_started", output_directory=str(output_path))
 
     while True:
         try:
-            # čeká max 0.5 sekundy na položku
-            item: Tuple[str, Image.Image] = processed_queue.get(timeout=0.5)
-        except queue.Empty:
-            # když nic není, zkontrolujeme, jestli ještě někdo pracuje
+            file_name, image = processed_queue.get(timeout=1)
+        except Empty:
+            # If no more items AND all workers are done → saver can finish
             with lock:
-                if active_workers["count"] == 0 and processed_queue.empty():
-                    print("[SAVER] Žádní aktivní workeři a prázdná fronta, končím.")
+                if active_workers["count"] == 0:
                     break
             continue
 
-        filename, img = item
-        out_path = os.path.join(config.output_dir, filename)
+        save_path = output_path / file_name
 
-        print(f"[SAVER] Ukládám: {out_path}")
+        log_info(
+            "saving_started",
+            file=file_name,
+            output_path=str(save_path)
+        )
+
         try:
-            img.save(out_path)
+            # Save image on disk
+            image.save(save_path)
+
+            log_info(
+                "image_saved",
+                file=file_name,
+                output_path=str(save_path)
+            )
+
         except Exception as e:
-            print(f"[SAVER] CHYBA při ukládání {out_path}: {e}")
+            log_error(
+                "saving_error",
+                file=file_name,
+                output_path=str(save_path),
+                error=str(e)
+            )
+
         finally:
             processed_queue.task_done()
 
-    print("[SAVER] Hotovo.")
+    log_info("saver_finished")

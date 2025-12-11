@@ -1,39 +1,54 @@
 # src/pipeline/loader.py
 import os
-import queue
-from .config import Config
+from pathlib import Path
+from queue import Queue
+from typing import Optional
+
+from PIL import Image, UnidentifiedImageError
+
+from pipeline.config import Config
+from pipeline.logger import log_info, log_error
 
 
-def loader_thread(raw_queue: queue.Queue, config: Config) -> None:
+def loader_thread(raw_queue: Queue, config: Config) -> None:
     """
-    Vlákno, které prochází složku s obrázky a vkládá jejich cesty do fronty.
-
-    Na konci vloží do fronty tolik speciálních hodnot (None),
-    kolik je worker vláken. Tyto "sentinely" workerům říkají:
-    'už není co dělat, můžeš skončit'.
+    Loads image file paths from the input directory and pushes them into raw_queue.
+    Logs every discovered file and handles loading errors.
     """
-    print("[LOADER] Start")
+    input_path = Path(config.input_dir)
 
-    if not os.path.isdir(config.input_dir):
-        print(f"[LOADER] Vstupní složka neexistuje: {config.input_dir}")
+    if not input_path.exists():
+        log_error("input_directory_missing", path=str(input_path))
         return
 
-    for filename in os.listdir(config.input_dir):
-        path = os.path.join(config.input_dir, filename)
+    log_info("loader_started", input_directory=str(input_path))
 
-        # přeskočíme pod-složky
-        if not os.path.isfile(path):
+    # Scan for images
+    for file_name in os.listdir(input_path):
+        file_path = input_path / file_name
+
+        # Skip directories
+        if file_path.is_dir():
             continue
 
-        # jednoduchý filtr na typy souborů
-        if not filename.lower().endswith((".png", ".jpg", ".jpeg")):
+        # Try to validate file as an image
+        try:
+            with Image.open(file_path) as img:
+                img.verify()  # Validate file header
+        except (UnidentifiedImageError, OSError):
+            log_error(
+                "image_invalid",
+                file_name=file_name,
+                path=str(file_path)
+            )
             continue
 
-        print(f"[LOADER] Přidávám do fronty: {path}")
-        raw_queue.put(path)
+        # Image is valid → push into queue
+        raw_queue.put(file_path)
+        log_info(
+            "image_discovered",
+            file_name=file_name,
+            path=str(file_path)
+        )
 
-    # po vložení všech cest vložíme sentinely
-    for _ in range(config.num_workers):
-        raw_queue.put(None)
-
-    print("[LOADER] Hotovo, všechny soubory ve frontě.")
+    log_info("loader_finished")

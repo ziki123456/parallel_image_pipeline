@@ -8,40 +8,37 @@ import yaml
 @dataclass
 class Config:
     """
-    Konfigurace aplikace načítaná z externího souboru config.yaml.
-    YAML může přepsat libovolnou hodnotu, ale pokud tam něco chybí,
-    použije se výchozí hodnota z dataclass.
+    Application configuration loaded from an external config.yaml file.
+    YAML values override defaults. Defaults are used if keys are missing.
     """
 
-    # Výchozí hodnoty (fallback)
     input_dir: str = "input_Images"
     output_dir: str = "output"
     num_workers: int = 3
     resize_to: Tuple[int, int] = (800, 800)
     grayscale: bool = True
 
+    # NEW SETTINGS
+    max_cpu_cores: int = 4
+    auto_worker_mode: bool = True
+
     def __post_init__(self) -> None:
-        """
-        Po inicializaci načteme hodnoty z config.yaml a přepíšeme jimi výchozí hodnoty.
-        Soubor se vždy hledá v kořeni projektu (vedle README.md).
-        """
-        # Najdeme kořen projektu – nadřazený adresář "src"
         project_root = Path(__file__).resolve().parents[2]
         config_path = project_root / "config.yaml"
 
         if not config_path.exists():
             raise FileNotFoundError(
-                f"Konfigurační soubor {config_path} neexistuje. "
-                f"Umísti config.yaml do kořenového adresáře projektu."
+                f"Configuration file {config_path} not found. "
+                f"Place config.yaml in the project root directory."
             )
 
-        # Načtení YAML
         with config_path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
 
-        # Přepíšeme pouze položky, které jsou v YAML
+        # Overwrite attributes if present in YAML
         self.input_dir = data.get("input_dir", self.input_dir)
         self.output_dir = data.get("output_dir", self.output_dir)
+
         self.num_workers = int(data.get("num_workers", self.num_workers))
 
         resize_val = data.get("resize_to", list(self.resize_to))
@@ -49,3 +46,7 @@ class Config:
             self.resize_to = (int(resize_val[0]), int(resize_val[1]))
 
         self.grayscale = bool(data.get("grayscale", self.grayscale))
+
+        # NEW CONFIG FIELDS
+        self.max_cpu_cores = int(data.get("max_cpu_cores", self.max_cpu_cores))
+        self.auto_worker_mode = bool(data.get("auto_worker_mode", self.auto_worker_mode))

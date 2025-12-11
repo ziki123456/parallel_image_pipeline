@@ -1,5 +1,7 @@
 input_dir: "input_Images"
 output_dir: "output"
-num_workers: 3
+num_workers: 3  # default fallback, not used if auto_worker_mode is enabled
 resize_to: [800, 800]
 grayscale: true
+max_cpu_cores: 8   # NEW: limit for max CPU cores the program may use
+auto_worker_mode: true  # NEW: enables automatic worker calculation
