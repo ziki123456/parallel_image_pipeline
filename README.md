@@ -11,11 +11,13 @@ The application demonstrates real-world parallelism, synchronization, and safe c
 ## Features
 
 * Parallel image processing
-* Configurable number of worker threads
+* Automatic or manual worker thread selection
 * Automatic folder handling
 * Thread-safe communication via queues
 * Resize and grayscale filters
 * Safe worker shutdown using sentinels
+* Logging system (logs/app.log)
+* Modular loader → processor → saver architecture
 
 ## Project Structure
 
@@ -25,6 +27,8 @@ PV_Rocnikova_Prace/
 ├── doc/
 ├── input/
 ├── output/
+├── logs/
+│   └── app.log
 ├── src/
 │   ├── main.py
 │   └── pipeline/
@@ -32,7 +36,8 @@ PV_Rocnikova_Prace/
 │       ├── config.py
 │       ├── loader.py
 │       ├── processor.py
-│       └── saver.py
+│       ├── saver.py
+│       └── logger_setup.py
 └── requirements.txt
 ```
 
@@ -43,7 +48,8 @@ Install required libraries:
 ```
 pip install -r requirements.txt
 ```
-If not working try
+
+If this does not work, try:
 
 ```
 python -m pip install pillow
@@ -60,6 +66,7 @@ python src/main.py
 ```
 
 3. Processed images will appear in the **output/** directory.
+4. Logs will appear in **logs/app.log**.
 
 ## Configuration
 
@@ -67,43 +74,69 @@ The `Config` class in `config.py` allows adjustment of:
 
 * Input folder
 * Output folder
-* Number of workers
+* Worker thread configuration
 * Resize dimensions
-* Whether to apply grayscale
+* Grayscale on/off
+* Logging on/off
 
-Example:
+### Automatic Worker Thread Calculation
 
-class Config:
-pass
+If `auto_threads = True`, the program uses:
 
 ```
-python
-Config(
-    input_dir="input",
-    output_dir="output",
-    num_workers=3,
-    resize_to=(800, 800),
-    grayscale=True
-)
+num_workers = min(cpu_count() * 2, number_of_images)
+```
+
+### Example Configuration
+
+```python
+class Config:
+    input_dir = "input"
+    output_dir = "output"
+
+    auto_threads = True
+    num_workers = 3
+
+    resize_to = (800, 800)
+    grayscale = True
+
+    logging_enabled = True
 ```
 
 ## How It Works
 
-* **loader_thread** reads filenames and pushes them into a queue.
-* **worker threads** take filenames, load and process images, and push processed results into another queue.
-* **saver_thread** takes processed images and writes them to disk.
+* **loader_thread**  
+  Reads filenames from the input folder and pushes them into a queue.  
+  Sends a sentinel value (`None`) when finished.
 
-Queues ensure safe communication between threads.
+* **worker threads**  
+  Take filenames from the queue, load images, apply transformations, and push results into the save queue.
+
+* **saver_thread**  
+  Saves processed images to the output directory.  
+  Terminates after receiving the required number of sentinels.
+
+Queues ensure safe communication between all parts of the pipeline.
 
 ## Thread Safety
 
 * Uses `queue.Queue` (thread-safe) for communication.
-* Uses a shared `active_workers` counter protected by a lock.
-* Uses sentinel values (`None`) to cleanly terminate workers.
+* Shared counters protected by locks.
+* Sentinels (`None`) ensure clean worker shutdown without race conditions.
+
+## Logging System
+
+All events are recorded in:
+
+```
+logs/app.log
+```
+
+(Worker activity, errors, warnings, file load/save actions, pipeline status updates.)
 
 ## Output
 
-Processed images are saved using the original filename, transformed according to configuration.
+Processed images are saved using the original filenames, resized and/or converted to grayscale according to configuration.
 
 ## Author
 
