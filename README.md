@@ -43,6 +43,12 @@ Install required libraries:
 ```
 pip install -r requirements.txt
 ```
+If not working try
+
+```
+python -m pip install pillow
+python -m pip install pyyaml
+```
 
 ## How to Run
 
